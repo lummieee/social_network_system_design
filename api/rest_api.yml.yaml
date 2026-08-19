@@ -1,0 +1,508 @@
+openapi: 3.0.3
+info:
+  title: VKontakte System Design REST API
+  description: REST API для социальной сети ВКонтакте (ДЗ №2)
+  version: 1.0.0
+servers:
+  # Added by API Auto Mocking Plugin
+  - description: SwaggerHub API Auto Mocking
+    url: https://virtserver.swaggerhub.com/antoshkaovsyannikovo/VK_API/1.0.0
+  - url: https://vk.com
+    description: Основной боевой сервер
+paths:
+  /users/{userId}:
+    get:
+      summary: Просмотр анкеты пользователя
+      description: Возвращает детальную информацию о профиле пользователя по его уникальному ID.
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          description: Уникальный идентификатор пользователя
+          schema:
+            type: integer
+            format: int64
+            example: 12345
+      responses:
+        '200':
+          description: Успешный ответ с данными анкеты
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '404':
+          description: Пользователь с таким ID не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /users/{userId}/friends:
+    get:
+      summary: Просмотр друзей пользователя
+      description: Возвращает список друзей пользователя с поддержкой пагинации.
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: limit
+          in: query
+          required: false
+          description: Количество возвращаемых друзей
+          schema:
+            type: integer
+            default: 20
+            example: 20
+        - name: offset
+          in: query
+          required: false
+          description: Смещение относительно начала списка
+          schema:
+            type: integer
+            default: 0
+            example: 0
+      responses:
+        '200':
+          description: Успешный возврат списка друзей
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  friends:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/UserProfile'
+                  total_count:
+                    type: integer
+                    example: 142
+    post:
+      summary: Добавление в друзья
+      description: Отправляет заявку в друзья или принимает существующую.
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - friend_id
+              properties:
+                friend_id:
+                  type: integer
+                  format: int64
+                  example: 67890
+      responses:
+        '200':
+          description: Заявка успешно отправлена или принята
+        '400':
+          description: Неверный ID друга или попытка добавить самого себя
+
+  /users/{userId}/friends/{friendId}:
+    delete:
+      summary: Удаление из друзей
+      description: Удаляет пользователя из списка друзей или отменяет подписку.
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: friendId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Пользователь успешно удален из друзей
+
+  /users/{userId}/posts:
+    post:
+      summary: Публикация поста в ленту (на стену)
+      description: Создает новую публикацию на стене пользователя.
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - text
+              properties:
+                text:
+                  type: string
+                  description: Текст публикации
+                  example: "Всем привет! Это мой первый пост во ВКонтакте."
+                media_ids:
+                  type: array
+                  description: Список идентификаторов прикрепленных медиафайлов
+                  items:
+                    type: string
+                    format: uuid
+                    example: "123e4567-e89b-12d3-a456-426614174000"
+      responses:
+        '201':
+          description: Пост успешно опубликован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Post'
+    get:
+      summary: Просмотр ленты постов пользователя
+      description: Возвращает список постов с конкрестной стены пользователя с пагинацией.
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 10
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Успешный возврат списка постов
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  posts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Post'
+
+  /media/upload:
+    post:
+      summary: Загрузка медиафайлов для постов
+      description: Используется для предварительной загрузки картинок или видео перед публикацией поста.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Бинарный файл для загрузки
+      responses:
+        '201':
+          description: Файл успешно загружен
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  media_id:
+                    type: string
+                    format: uuid
+                    example: "123e4567-e89b-12d3-a456-426614174000"
+                  url:
+                    type: string
+                    format: uri
+                    example: "https://vk.com"
+
+  /feed:
+    get:
+      summary: Просмотр домашней ленты постов
+      description: Возвращает хронологическую ленту новостей для текущего авторизованного пользователя.
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: Количество постов в одной порции данных
+          schema:
+            type: integer
+            default: 15
+            example: 15
+        - name: start_from
+          in: query
+          required: false
+          description: Идентификатор курсора для пагинации
+          schema:
+            type: string
+            example: "eyJjcmVhdGVkX2F0IjoxNzE1NTY4OTAwLCJpZCI6OTg3NjU0fQ=="
+      responses:
+        '200':
+          description: Успешный возврат ленты новостей
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Post'
+                  next_from:
+                    type: string
+                    description: Курсор для запроса следующей страницы
+                    example: "eyJjcmVhdGVkX2F0IjoxNzE1NTY3ODAwLCJpZCI6OTg3NjUzfQ=="
+
+  /chats:
+    get:
+      summary: Просмотр списка диалогов и чатов
+      description: Возвращает список всех чатов текущего пользователя с последним сообщением в каждом.
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Список чатов успешно получен
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  chats:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Chat'
+
+  /chats/{chatId}/messages:
+    get:
+      summary: Чтение сообщений в диалоге/чате
+      description: Возвращает историю сообщений конкретного чата с пагинацией.
+      parameters:
+        - name: chatId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: История сообщений успешно получена
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Message'
+    post:
+      summary: Отправка сообщения в диалог/чат
+      description: Отправляет текстовое сообщение или медиафайл в указанный чат.
+      parameters:
+        - name: chatId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - text
+              properties:
+                text:
+                  type: string
+                  example: "Привет! Как дела с домашкой по систем дизайну?"
+                media_ids:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+      responses:
+        '201':
+          description: Сообщение успешно отправлено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+
+components:
+  schemas:
+    UserProfile:
+      type: object
+      required:
+        - id
+        - first_name
+        - last_name
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 12345
+        first_name:
+          type: string
+          example: "Иван"
+        last_name:
+          type: string
+          example: "Иванов"
+        status:
+          type: string
+          example: "Учу System Design..."
+        bdate:
+          type: string
+          format: date
+          example: "1995-04-12"
+        city:
+          type: string
+          example: "Москва"
+        avatar_url:
+          type: string
+          format: uri
+          example: "https://vk.com"
+
+    Post:
+      type: object
+      required:
+        - post_id
+        - author_id
+        - text
+        - created_at
+      properties:
+        post_id:
+          type: integer
+          format: int64
+          example: 987654
+        author_id:
+          type: integer
+          format: int64
+          example: 12345
+        text:
+          type: string
+          example: "Всем привет! Это мой первый пост во ВКонтакте."
+        media_urls:
+          type: array
+          items:
+            type: string
+            format: uri
+            example: "https://vk.com"
+        likes_count:
+          type: integer
+          example: 42
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-08-18T12:00:00Z"
+
+    Chat:
+      type: object
+      required:
+        - chat_id
+        - type
+        - title
+      properties:
+        chat_id:
+          type: integer
+          format: int64
+          example: 554433
+        type:
+          type: string
+          enum: [dialog, group]
+          example: "dialog"
+        title:
+          type: string
+          example: "Владимир Балунов"
+        avatar_url:
+          type: string
+          format: uri
+          example: "https://vk.com"
+        last_message:
+          $ref: '#/components/schemas/Message'
+
+    Message:
+      type: object
+      required:
+        - message_id
+        - sender_id
+        - text
+        - created_at
+      properties:
+        message_id:
+          type: integer
+          format: int64
+          example: 112233
+        sender_id:
+          type: integer
+          format: int64
+          example: 12345
+        text:
+          type: string
+          example: "Привет! Как дела с домашкой по систем дизайну?"
+        media_urls:
+          type: array
+          items:
+            type: string
+            format: uri
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-08-18T12:30:00Z"
+
+    ErrorResponse:
+      type: object
+      required:
+        - error_code
+        - message
+      properties:
+        error_code:
+          type: integer
+          example: 404
+        message:
+          type: string
+          example: "User not found"
